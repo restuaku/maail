@@ -1,0 +1,30 @@
+name: Deploy Worker + Apply D1 Schema
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply schema.sql to D1 + Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Jalankan ini sebelum deploy
+          preCommands: |
+            npm install
+            wrangler d1 execute mail_portal --file=./schema.sql --remote --yes
+          # Deploy worker
+          command: deploy
+          # Optional: kalau kamu mau set Worker Secrets via Actions
+          # (hapus blok secrets ini kalau tidak dipakai)
+          secrets: |
+            RESEND_API_KEY
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
