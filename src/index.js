@@ -15,7 +15,7 @@ const encoder = new TextEncoder();
 
 // -------------------- Security/Hashing constants --------------------
 const PBKDF2_MAX_ITERS = 100000; // Cloudflare Workers WebCrypto limit
-const PBKDF2_MIN_ITERS = 10000;  // sensible floor
+const PBKDF2_MIN_ITERS = 10000; // sensible floor
 
 let USERS_HAS_PASS_ITERS = null;
 
@@ -46,10 +46,18 @@ function html(body, status = 200, headers = {}) {
   });
 }
 
-function badRequest(msg) { return json({ ok: false, error: msg }, 400); }
-function unauthorized(msg = "Unauthorized") { return json({ ok: false, error: msg }, 401); }
-function forbidden(msg = "Forbidden") { return json({ ok: false, error: msg }, 403); }
-function notFound() { return json({ ok: false, error: "Not found" }, 404); }
+function badRequest(msg) {
+  return json({ ok: false, error: msg }, 400);
+}
+function unauthorized(msg = "Unauthorized") {
+  return json({ ok: false, error: msg }, 401);
+}
+function forbidden(msg = "Forbidden") {
+  return json({ ok: false, error: msg }, 403);
+}
+function notFound() {
+  return json({ ok: false, error: "Not found" }, 404);
+}
 
 // -------------------- Utils --------------------
 function safeInt(v, fallback) {
@@ -309,6 +317,28 @@ function pageTemplate(title, body, extraHead = "") {
       box-shadow: 0 0 0 4px rgba(96,165,250,.12);
     }
 
+    /* Password show/hide */
+    .pwWrap{ position:relative; }
+    .pwWrap input{ padding-right: 92px; } /* ruang buat tombol */
+    .pwToggle{
+      position:absolute;
+      right:10px;
+      top:50%;
+      transform:translateY(-50%);
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+      font-size:12px;
+      cursor:pointer;
+    }
+    .pwToggle:hover{
+      background: rgba(255,255,255,.10);
+      color: var(--text);
+      border-color: rgba(96,165,250,.28);
+    }
+
     button{
       padding:10px 12px;
       border-radius:14px;
@@ -459,7 +489,10 @@ const PAGES = {
           </div>
           <div>
             <label>Password</label>
-            <input id="pw" type="password" placeholder="••••••••" autocomplete="current-password" />
+            <div class="pwWrap">
+              <input id="pw" type="password" placeholder="••••••••" autocomplete="current-password" />
+              <button type="button" class="pwToggle" onclick="togglePw('pw', this)">Show</button>
+            </div>
           </div>
         </div>
 
@@ -471,6 +504,15 @@ const PAGES = {
       </div>
 
       <script>
+        function togglePw(id, btn){
+          const el = document.getElementById(id);
+          if(!el) return;
+          const show = el.type === 'password';
+          el.type = show ? 'text' : 'password';
+          btn.textContent = show ? 'Hide' : 'Show';
+          btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+        }
+
         async function readJsonOrText(r){
           try { return await r.json(); }
           catch {
@@ -521,7 +563,10 @@ const PAGES = {
 
         <div style="margin-top:12px">
           <label>Password</label>
-          <input id="pw" type="password" placeholder="minimal 8 karakter" autocomplete="new-password" />
+          <div class="pwWrap">
+            <input id="pw" type="password" placeholder="minimal 8 karakter" autocomplete="new-password" />
+            <button type="button" class="pwToggle" onclick="togglePw('pw', this)">Show</button>
+          </div>
           <div class="muted" style="margin-top:10px">
             Mail kamu nanti berbentuk <span class="kbd">nama@${domain}</span>
           </div>
@@ -534,6 +579,15 @@ const PAGES = {
       </div>
 
       <script>
+        function togglePw(id, btn){
+          const el = document.getElementById(id);
+          if(!el) return;
+          const show = el.type === 'password';
+          el.type = show ? 'text' : 'password';
+          btn.textContent = show ? 'Hide' : 'Show';
+          btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+        }
+
         async function readJsonOrText(r){
           try { return await r.json(); }
           catch {
@@ -589,7 +643,10 @@ const PAGES = {
           </div>
           <div>
             <label>Password baru</label>
-            <input id="npw" type="password" placeholder="••••••••" autocomplete="new-password" />
+            <div class="pwWrap">
+              <input id="npw" type="password" placeholder="••••••••" autocomplete="new-password" />
+              <button type="button" class="pwToggle" onclick="togglePw('npw', this)">Show</button>
+            </div>
           </div>
         </div>
         <div style="margin-top:12px">
@@ -599,6 +656,15 @@ const PAGES = {
       </div>
 
       <script>
+        function togglePw(id, btn){
+          const el = document.getElementById(id);
+          if(!el) return;
+          const show = el.type === 'password';
+          el.type = show ? 'text' : 'password';
+          btn.textContent = show ? 'Hide' : 'Show';
+          btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+        }
+
         async function readJsonOrText(r){
           try { return await r.json(); }
           catch {
@@ -718,7 +784,7 @@ const PAGES = {
             }
             // if string numeric seconds
             const s = String(v);
-            if(/^\d{9,13}$/.test(s)){
+            if(/^\\d{9,13}$/.test(s)){
               const n = Number(s);
               const ms = n < 1000000000000 ? (n*1000) : n;
               return new Date(ms).toLocaleString();
@@ -1070,8 +1136,12 @@ async function destroySession(request, env) {
 
 async function cleanupExpired(env) {
   const t = nowSec();
-  try { await env.DB.prepare(`DELETE FROM sessions WHERE expires_at <= ?`).bind(t).run(); } catch {}
-  try { await env.DB.prepare(`DELETE FROM reset_tokens WHERE expires_at <= ?`).bind(t).run(); } catch {}
+  try {
+    await env.DB.prepare(`DELETE FROM sessions WHERE expires_at <= ?`).bind(t).run();
+  } catch {}
+  try {
+    await env.DB.prepare(`DELETE FROM reset_tokens WHERE expires_at <= ?`).bind(t).run();
+  } catch {}
 }
 
 // -------------------- Reset email (Resend) --------------------
@@ -1154,7 +1224,7 @@ export default {
           const pw = String(body.pw || "");
 
           if (!/^[a-z0-9_]{3,24}$/.test(username)) return badRequest("Username 3-24, a-z0-9_");
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return badRequest("Email tidak valid");
+          if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return badRequest("Email tidak valid");
           if (pw.length < 8) return badRequest("Password minimal 8 karakter");
 
           const iters = pbkdf2Iters(env);
@@ -1176,12 +1246,16 @@ export default {
               await env.DB.prepare(
                 `INSERT INTO users (id, username, email, pass_salt, pass_hash, pass_iters, role, alias_limit, disabled, created_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`
-              ).bind(id, username, email, pass_salt, pass_hash, iters, role, aliasLimit, t).run();
+              )
+                .bind(id, username, email, pass_salt, pass_hash, iters, role, aliasLimit, t)
+                .run();
             } else {
               await env.DB.prepare(
                 `INSERT INTO users (id, username, email, pass_salt, pass_hash, role, alias_limit, disabled, created_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
-              ).bind(id, username, email, pass_salt, pass_hash, role, aliasLimit, t).run();
+              )
+                .bind(id, username, email, pass_salt, pass_hash, role, aliasLimit, t)
+                .run();
             }
           } catch (e) {
             const msg = String(e && e.message ? e.message : e);
@@ -1193,11 +1267,9 @@ export default {
           const ttl = safeInt(env.SESSION_TTL_SECONDS, 1209600);
           const token = await createSession(env, id, ttl);
 
-          return json(
-            { ok: true },
-            200,
-            { "set-cookie": setCookieHeader("session", token, { maxAge: ttl, secure: cookieSecure }) }
-          );
+          return json({ ok: true }, 200, {
+            "set-cookie": setCookieHeader("session", token, { maxAge: ttl, secure: cookieSecure }),
+          });
         }
 
         // Login
@@ -1215,11 +1287,15 @@ export default {
             ? await env.DB.prepare(
                 `SELECT id, username, email, pass_salt, pass_hash, pass_iters, role, alias_limit, disabled
                  FROM users WHERE username = ? OR email = ?`
-              ).bind(id, id).first()
+              )
+                .bind(id, id)
+                .first()
             : await env.DB.prepare(
                 `SELECT id, username, email, pass_salt, pass_hash, role, alias_limit, disabled
                  FROM users WHERE username = ? OR email = ?`
-              ).bind(id, id).first();
+              )
+                .bind(id, id)
+                .first();
 
           if (!user || user.disabled) return unauthorized("Login gagal");
 
@@ -1245,21 +1321,17 @@ export default {
           const ttl = safeInt(env.SESSION_TTL_SECONDS, 1209600);
           const token = await createSession(env, user.id, ttl);
 
-          return json(
-            { ok: true },
-            200,
-            { "set-cookie": setCookieHeader("session", token, { maxAge: ttl, secure: cookieSecure }) }
-          );
+          return json({ ok: true }, 200, {
+            "set-cookie": setCookieHeader("session", token, { maxAge: ttl, secure: cookieSecure }),
+          });
         }
 
         // Logout
         if (path === "/api/auth/logout" && request.method === "POST") {
           await destroySession(request, env);
-          return json(
-            { ok: true },
-            200,
-            { "set-cookie": setCookieHeader("session", "", { maxAge: 0, secure: cookieSecure }) }
-          );
+          return json({ ok: true }, 200, {
+            "set-cookie": setCookieHeader("session", "", { maxAge: 0, secure: cookieSecure }),
+          });
         }
 
         // Reset request
@@ -1268,7 +1340,7 @@ export default {
           if (!body) return badRequest("JSON required");
 
           const email = String(body.email || "").trim().toLowerCase();
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return badRequest("Email tidak valid");
+          if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return badRequest("Email tidak valid");
 
           const user = await env.DB.prepare(`SELECT id, disabled FROM users WHERE email = ?`)
             .bind(email)
@@ -1286,7 +1358,9 @@ export default {
           await env.DB.prepare(
             `INSERT INTO reset_tokens (token_hash, user_id, expires_at, created_at)
              VALUES (?, ?, ?, ?)`
-          ).bind(tokenHash, user.id, t + ttl, t).run();
+          )
+            .bind(tokenHash, user.id, t + ttl, t)
+            .run();
 
           ctx.waitUntil(sendResetEmail(env, email, token));
           return json({ ok: true });
@@ -1306,7 +1380,9 @@ export default {
           const tokenHash = await sha256Base64Url(encoder.encode(token));
           const rt = await env.DB.prepare(
             `SELECT user_id, expires_at FROM reset_tokens WHERE token_hash = ?`
-          ).bind(tokenHash).first();
+          )
+            .bind(tokenHash)
+            .first();
 
           if (!rt || rt.expires_at <= nowSec()) return badRequest("Token invalid/expired");
 
@@ -1318,10 +1394,12 @@ export default {
           const hasIters = await usersHasPassIters(env);
           if (hasIters) {
             await env.DB.prepare(`UPDATE users SET pass_salt=?, pass_hash=?, pass_iters=? WHERE id=?`)
-              .bind(pass_salt, pass_hash, iters, rt.user_id).run();
+              .bind(pass_salt, pass_hash, iters, rt.user_id)
+              .run();
           } else {
             await env.DB.prepare(`UPDATE users SET pass_salt=?, pass_hash=? WHERE id=?`)
-              .bind(pass_salt, pass_hash, rt.user_id).run();
+              .bind(pass_salt, pass_hash, rt.user_id)
+              .run();
           }
 
           await env.DB.prepare(`DELETE FROM reset_tokens WHERE token_hash=?`).bind(tokenHash).run();
@@ -1350,7 +1428,9 @@ export default {
           const rows = await env.DB.prepare(
             `SELECT local_part, disabled, created_at
              FROM aliases WHERE user_id = ? ORDER BY created_at DESC`
-          ).bind(me.id).all();
+          )
+            .bind(me.id)
+            .all();
           return json({ ok: true, aliases: rows.results || [] });
         }
 
@@ -1363,7 +1443,9 @@ export default {
 
           const cnt = await env.DB.prepare(
             `SELECT COUNT(*) as c FROM aliases WHERE user_id = ? AND disabled = 0`
-          ).bind(me.id).first();
+          )
+            .bind(me.id)
+            .first();
 
           if (Number(cnt?.c ?? 0) >= me.alias_limit) return forbidden("Limit mail tercapai");
 
@@ -1372,7 +1454,9 @@ export default {
             await env.DB.prepare(
               `INSERT INTO aliases (local_part, user_id, disabled, created_at)
                VALUES (?, ?, 0, ?)`
-            ).bind(local, me.id, t).run();
+            )
+              .bind(local, me.id, t)
+              .run();
           } catch (e) {
             const msg = String(e && e.message ? e.message : e);
             if (msg.toUpperCase().includes("UNIQUE")) return badRequest("Mail sudah dipakai");
@@ -1389,12 +1473,15 @@ export default {
 
           const own = await env.DB.prepare(
             `SELECT local_part FROM aliases WHERE local_part = ? AND user_id = ?`
-          ).bind(local, me.id).first();
+          )
+            .bind(local, me.id)
+            .first();
 
           if (!own) return notFound();
 
           await env.DB.prepare(`DELETE FROM aliases WHERE local_part = ? AND user_id = ?`)
-            .bind(local, me.id).run();
+            .bind(local, me.id)
+            .run();
 
           return json({ ok: true });
         }
@@ -1406,7 +1493,9 @@ export default {
 
           const own = await env.DB.prepare(
             `SELECT local_part FROM aliases WHERE local_part = ? AND user_id = ? AND disabled = 0`
-          ).bind(alias, me.id).first();
+          )
+            .bind(alias, me.id)
+            .first();
 
           if (!own) return forbidden("Mail bukan milikmu / disabled");
 
@@ -1417,7 +1506,9 @@ export default {
              WHERE user_id = ? AND local_part = ?
              ORDER BY created_at DESC
              LIMIT 50`
-          ).bind(me.id, alias).all();
+          )
+            .bind(me.id, alias)
+            .all();
 
           return json({ ok: true, emails: rows.results || [] });
         }
@@ -1427,7 +1518,9 @@ export default {
           const row = await env.DB.prepare(
             `SELECT id, from_addr, to_addr, subject, date, text, html, raw_key, created_at
              FROM emails WHERE id = ? AND user_id = ?`
-          ).bind(id, me.id).first();
+          )
+            .bind(id, me.id)
+            .first();
 
           if (!row) return notFound();
           return json({ ok: true, email: row });
@@ -1435,14 +1528,15 @@ export default {
 
         if (path.startsWith("/api/emails/") && request.method === "DELETE") {
           const id = decodeURIComponent(path.slice("/api/emails/".length));
-          const row = await env.DB.prepare(
-            `SELECT raw_key FROM emails WHERE id = ? AND user_id = ?`
-          ).bind(id, me.id).first();
+          const row = await env.DB.prepare(`SELECT raw_key FROM emails WHERE id = ? AND user_id = ?`)
+            .bind(id, me.id)
+            .first();
 
           if (!row) return notFound();
 
           await env.DB.prepare(`DELETE FROM emails WHERE id = ? AND user_id = ?`)
-            .bind(id, me.id).run();
+            .bind(id, me.id)
+            .run();
 
           if (row.raw_key && env.MAIL_R2) ctx.waitUntil(env.MAIL_R2.delete(row.raw_key));
           return json({ ok: true });
@@ -1472,10 +1566,14 @@ export default {
           const body = await readJson(request);
           if (!body) return badRequest("JSON required");
 
-          const alias_limit = body.alias_limit !== undefined ? safeInt(body.alias_limit, NaN) : undefined;
+          const alias_limit =
+            body.alias_limit !== undefined ? safeInt(body.alias_limit, NaN) : undefined;
           const disabled = body.disabled !== undefined ? safeInt(body.disabled, NaN) : undefined;
 
-          if (alias_limit !== undefined && (!Number.isFinite(alias_limit) || alias_limit < 0 || alias_limit > 1000)) {
+          if (
+            alias_limit !== undefined &&
+            (!Number.isFinite(alias_limit) || alias_limit < 0 || alias_limit > 1000)
+          ) {
             return badRequest("alias_limit invalid");
           }
           if (disabled !== undefined && !(disabled === 0 || disabled === 1)) {
@@ -1484,12 +1582,20 @@ export default {
 
           const sets = [];
           const binds = [];
-          if (alias_limit !== undefined) { sets.push("alias_limit = ?"); binds.push(alias_limit); }
-          if (disabled !== undefined) { sets.push("disabled = ?"); binds.push(disabled); }
+          if (alias_limit !== undefined) {
+            sets.push("alias_limit = ?");
+            binds.push(alias_limit);
+          }
+          if (disabled !== undefined) {
+            sets.push("disabled = ?");
+            binds.push(disabled);
+          }
           if (sets.length === 0) return badRequest("No fields");
 
           binds.push(userId);
-          await env.DB.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).bind(...binds).run();
+          await env.DB.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`)
+            .bind(...binds)
+            .run();
           return json({ ok: true });
         }
 
@@ -1520,7 +1626,9 @@ export default {
          FROM aliases a
          JOIN users u ON u.id = a.user_id
          WHERE a.local_part = ?`
-      ).bind(local).first();
+      )
+        .bind(local)
+        .first();
 
       if (!row || row.alias_disabled || row.user_disabled) {
         message.setReject("Unknown recipient");
@@ -1543,8 +1651,7 @@ export default {
 
       const subject = parsed.subject || "";
       const date = parsed.date ? new Date(parsed.date).toISOString() : "";
-      const fromAddr =
-        parsed.from && parsed.from.address ? parsed.from.address : (message.from || "");
+      const fromAddr = parsed.from && parsed.from.address ? parsed.from.address : (message.from || "");
       const toAddr = message.to || "";
 
       const maxTextChars = safeInt(env.MAX_TEXT_CHARS, 200000);
@@ -1554,29 +1661,29 @@ export default {
       let raw_key = null;
       if (env.MAIL_R2) {
         raw_key = `emails/${id}.eml`;
-        ctx.waitUntil(
-          env.MAIL_R2.put(raw_key, ab, { httpMetadata: { contentType: "message/rfc822" } })
-        );
+        ctx.waitUntil(env.MAIL_R2.put(raw_key, ab, { httpMetadata: { contentType: "message/rfc822" } }));
       }
 
       await env.DB.prepare(
         `INSERT INTO emails
          (id, local_part, user_id, from_addr, to_addr, subject, date, text, html, raw_key, size, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(
-        id,
-        row.local_part,
-        row.user_id,
-        fromAddr,
-        toAddr,
-        subject,
-        date,
-        text,
-        htmlPart,
-        raw_key,
-        ab.byteLength || (message.rawSize || 0),
-        t
-      ).run();
+      )
+        .bind(
+          id,
+          row.local_part,
+          row.user_id,
+          fromAddr,
+          toAddr,
+          subject,
+          date,
+          text,
+          htmlPart,
+          raw_key,
+          ab.byteLength || (message.rawSize || 0),
+          t
+        )
+        .run();
     } catch (e) {
       console.log("email handler error:", e && e.stack ? e.stack : e);
       message.setReject("Temporary processing error");
