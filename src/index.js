@@ -7,7 +7,7 @@ import PostalMime from "postal-mime";
  * - Signup/Login/Logout
  * - Reset password via Resend (optional; but recommended)
  * - Mail (alias) management with per-user limit
- * - Admin dashboard: list users, set mail limit, disable user
+ * - Admin dashboard: list users, set mail limit, disable user, DELETE user
  * - Email handler: accept via catch-all, store if mail registered else reject
  */
 
@@ -1009,6 +1009,7 @@ const PAGES = {
       <div class="card">
         <b>Users</b>
         <div class="muted" style="margin-top:6px">Domain: <span class="kbd">@${domain}</span></div>
+        <div class="muted" style="margin-top:6px">⚠️ Delete akan menghapus data user (sessions, tokens, aliases, emails) + raw email di R2 jika ada.</div>
         <div id="users" style="margin-top:12px"></div>
       </div>
 
@@ -1050,6 +1051,7 @@ const PAGES = {
                 '<input id="lim_'+esc(u.id)+'" value="'+u.alias_limit+'" style="width:120px" />'+
                 '<button class="btn-primary" onclick="setLimit(\\''+esc(u.id)+'\\')">Set limit</button>'+
                 '<button onclick="toggleUser(\\''+esc(u.id)+'\\','+(u.disabled?0:1)+')" class="danger">'+(u.disabled?'Enable':'Disable')+'</button>'+
+                '<button onclick="delUser(\\''+encodeURIComponent(u.id)+'\\')" class="danger">Delete</button>'+
               '</div>';
             box.appendChild(div);
           }
@@ -1073,6 +1075,15 @@ const PAGES = {
             headers:{'content-type':'application/json'},
             body:JSON.stringify({disabled})
           });
+          if(!j.ok){ alert(j.error||'gagal'); return; }
+          await loadUsers();
+        }
+
+        async function delUser(encId){
+          const id = decodeURIComponent(encId);
+          if(!confirm('Hapus user ini?\\n\\nID: '+id+'\\n\\nAksi ini akan menghapus: sessions, reset tokens, mail aliases, emails (dan raw di R2 jika ada).')) return;
+
+          const j = await api('/api/admin/users/'+encodeURIComponent(id), { method:'DELETE' });
           if(!j.ok){ alert(j.error||'gagal'); return; }
           await loadUsers();
         }
@@ -1142,6 +1153,42 @@ async function cleanupExpired(env) {
   try {
     await env.DB.prepare(`DELETE FROM reset_tokens WHERE expires_at <= ?`).bind(t).run();
   } catch {}
+}
+
+// NEW: delete user (cascade + R2 cleanup)
+async function deleteUserCascade(env, userId, ctx) {
+  // ambil raw_key dulu sebelum email dihapus
+  let rawKeys = [];
+  try {
+    const r = await env.DB.prepare(
+      `SELECT raw_key FROM emails WHERE user_id = ? AND raw_key IS NOT NULL`
+    )
+      .bind(userId)
+      .all();
+    rawKeys = (r.results || []).map((x) => x?.raw_key).filter(Boolean);
+  } catch {}
+
+  // hapus data turunan dulu
+  await env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(userId).run();
+  await env.DB.prepare(`DELETE FROM reset_tokens WHERE user_id = ?`).bind(userId).run();
+  await env.DB.prepare(`DELETE FROM emails WHERE user_id = ?`).bind(userId).run();
+  await env.DB.prepare(`DELETE FROM aliases WHERE user_id = ?`).bind(userId).run();
+
+  // hapus user
+  await env.DB.prepare(`DELETE FROM users WHERE id = ?`).bind(userId).run();
+
+  // hapus raw eml dari R2 (kalau ada)
+  if (env.MAIL_R2 && rawKeys.length) {
+    for (let i = 0; i < rawKeys.length; i += 1000) {
+      const chunk = rawKeys.slice(i, i + 1000);
+      if (ctx && typeof ctx.waitUntil === "function") {
+        ctx.waitUntil(env.MAIL_R2.delete(chunk));
+      } else {
+        // fallback sync (harusnya fetch selalu punya ctx)
+        await env.MAIL_R2.delete(chunk);
+      }
+    }
+  }
 }
 
 // -------------------- Reset email (Resend) --------------------
@@ -1599,6 +1646,29 @@ export default {
           return json({ ok: true });
         }
 
+        // NEW: delete user (admin)
+        if (path.startsWith("/api/admin/users/") && request.method === "DELETE") {
+          if (me.role !== "admin") return forbidden("Forbidden");
+
+          const userId = decodeURIComponent(path.slice("/api/admin/users/".length));
+
+          // jangan hapus diri sendiri biar gak ngunci admin
+          if (userId === me.id) return badRequest("Tidak bisa menghapus akun sendiri");
+
+          const u = await env.DB.prepare(`SELECT id, role FROM users WHERE id = ?`).bind(userId).first();
+          if (!u) return notFound();
+
+          // safety: jangan hapus admin terakhir
+          if (u.role === "admin") {
+            const c = await env.DB.prepare(`SELECT COUNT(*) as c FROM users WHERE role = 'admin'`).first();
+            const adminCount = Number(c?.c ?? 0);
+            if (adminCount <= 1) return badRequest("Tidak bisa menghapus admin terakhir");
+          }
+
+          await deleteUserCascade(env, userId, ctx);
+          return json({ ok: true });
+        }
+
         return notFound();
       } catch (e) {
         console.log("API ERROR:", e && e.stack ? e.stack : e);
@@ -1651,7 +1721,8 @@ export default {
 
       const subject = parsed.subject || "";
       const date = parsed.date ? new Date(parsed.date).toISOString() : "";
-      const fromAddr = parsed.from && parsed.from.address ? parsed.from.address : (message.from || "");
+      const fromAddr =
+        parsed.from && parsed.from.address ? parsed.from.address : message.from || "";
       const toAddr = message.to || "";
 
       const maxTextChars = safeInt(env.MAX_TEXT_CHARS, 200000);
@@ -1661,7 +1732,9 @@ export default {
       let raw_key = null;
       if (env.MAIL_R2) {
         raw_key = `emails/${id}.eml`;
-        ctx.waitUntil(env.MAIL_R2.put(raw_key, ab, { httpMetadata: { contentType: "message/rfc822" } }));
+        ctx.waitUntil(
+          env.MAIL_R2.put(raw_key, ab, { httpMetadata: { contentType: "message/rfc822" } })
+        );
       }
 
       await env.DB.prepare(
@@ -1680,7 +1753,7 @@ export default {
           text,
           htmlPart,
           raw_key,
-          ab.byteLength || (message.rawSize || 0),
+          ab.byteLength || message.rawSize || 0,
           t
         )
         .run();
