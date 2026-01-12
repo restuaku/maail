@@ -240,20 +240,26 @@ function pageTemplate(title, body, extraHead = "") {
   ${extraHead}
   <style>
     :root{
-      --bg0:#070a10;
-      --bg1:#0a0f18;
+      /* Modern Slate Blue Theme - Professional & Eye-Friendly */
+      --bg0:#0f172a;
+      --bg1:#1e293b;
+      --bg2:#334155;
 
-      --card: rgba(15,23,42,.92);
-      --card2: rgba(11,18,32,.92);
-      --border: rgba(39,55,86,.92);
+      --card: rgba(30,41,59,.92);
+      --card2: rgba(15,23,42,.95);
+      --border: rgba(71,85,105,.45);
 
-      --text:#eef2ff;
-      --muted:#b8c3d6;
+      --text:#f1f5f9;
+      --muted:#94a3b8;
 
-      --brand:#60a5fa;
-      --brand2:#818cf8;
+      /* Bright Blue Brand */
+      --brand:#3b82f6;
+      --brand-light:#60a5fa;
+      --brand2:#06b6d4;
 
       --danger:#ef4444;
+      --success:#10b981;
+      --warning:#f59e0b;
 
       /* paper (buat baca email biar jelas) */
       --paper:#f8fafc;
@@ -268,8 +274,9 @@ function pageTemplate(title, body, extraHead = "") {
       color:var(--text);
       min-height:100vh;
       background:
-        radial-gradient(1200px 600px at 20% -10%, rgba(96,165,250,.10), transparent 60%),
-        radial-gradient(900px 500px at 90% 0%, rgba(129,140,248,.08), transparent 55%),
+        radial-gradient(1200px 600px at 10% 0%, rgba(59,130,246,.12), transparent 60%),
+        radial-gradient(900px 500px at 90% 10%, rgba(6,182,212,.10), transparent 55%),
+        radial-gradient(700px 400px at 50% 100%, rgba(99,102,241,.08), transparent 50%),
         linear-gradient(180deg, var(--bg1), var(--bg0));
     }
 
@@ -290,13 +297,17 @@ function pageTemplate(title, body, extraHead = "") {
 
     .card{
       background:
-        linear-gradient(180deg, rgba(255,255,255,.04), transparent 40%),
+        linear-gradient(180deg, rgba(255,255,255,.05), transparent 50%),
         var(--card);
-      border:1px solid var(--border);
-      border-radius:18px;
-      padding:16px;
-      margin:12px 0;
-      box-shadow: 0 14px 40px rgba(0,0,0,.35);
+      border:1px solid rgba(100,116,139,.35);
+      border-radius:20px;
+      padding:20px;
+      margin:16px 0;
+      box-shadow: 
+        0 8px 32px rgba(0,0,0,.4),
+        0 1px 2px rgba(59,130,246,.15);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       overflow:hidden;
     }
 
@@ -340,24 +351,34 @@ function pageTemplate(title, body, extraHead = "") {
     }
 
     button{
-      padding:10px 12px;
-      border-radius:14px;
+      padding:11px 16px;
+      border-radius:12px;
       border:1px solid var(--border);
-      background: rgba(96,165,250,.12);
+      background: rgba(59,130,246,.15);
       color:var(--text);
       cursor:pointer;
-      transition: transform .06s ease, background .15s ease, border-color .15s ease, filter .15s ease;
+      font-weight:500;
+      transition: all .2s ease;
       white-space:nowrap;
     }
     button:hover{
-      background: rgba(96,165,250,.16);
-      border-color: rgba(96,165,250,.28);
-      filter: brightness(1.03);
+      background: rgba(59,130,246,.22);
+      border-color: rgba(96,165,250,.45);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59,130,246,.25);
     }
-    button:active{transform: translateY(1px)}
+    button:active{transform: translateY(0)}
     .btn-primary{
-      background: linear-gradient(135deg, rgba(96,165,250,.28), rgba(129,140,248,.22));
-      border-color: rgba(96,165,250,.38);
+      background: linear-gradient(135deg, rgba(59,130,246,.4), rgba(6,182,212,.3));
+      border-color: rgba(59,130,246,.5);
+      font-weight:600;
+      box-shadow: 0 4px 14px rgba(59,130,246,.3);
+    }
+    .btn-primary:hover{
+      background: linear-gradient(135deg, rgba(59,130,246,.5), rgba(6,182,212,.4));
+      border-color: rgba(96,165,250,.6);
+      box-shadow: 0 6px 20px rgba(59,130,246,.4);
+      transform: translateY(-2px);
     }
     .btn-ghost{background: rgba(255,255,255,.04)}
     .danger{
@@ -746,24 +767,11 @@ const PAGES = {
       </div>
 
       <div class="card">
-        <div class="split">
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-              <b>Mail</b>
-              <span class="muted" id="limitInfo"></span>
-            </div>
-            <div id="aliases" style="margin-top:10px"></div>
-          </div>
-
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-              <b>Inbox</b>
-              <button class="btn-ghost" onclick="loadEmails()" id="refreshBtn" disabled>Refresh</button>
-            </div>
-            <div class="muted" id="selAlias" style="margin-top:10px">Pilih mail…</div>
-            <div id="emails" style="margin-top:10px"></div>
-          </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <b>Mail</b>
+          <span class="muted" id="limitInfo"></span>
         </div>
+        <div id="aliases" style="margin-top:10px"></div>
       </div>
 
       <div class="card" id="emailView" style="display:none"></div>
@@ -771,6 +779,7 @@ const PAGES = {
       <script>
         let ME=null;
         let SELECTED=null;
+        let AUTO_REFRESH_INTERVAL=null;
 
         function esc(s){return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));}
 
@@ -827,49 +836,89 @@ const PAGES = {
           }
           for(const a of j.aliases){
             const div=document.createElement('div');
-            div.className='listItem';
+            div.style.marginBottom='10px';
+            
             const addr = a.local_part+'@${domain}';
+            const isOpen = SELECTED===a.local_part;
+            
             div.innerHTML =
-              '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
-                '<button class="btn-primary" onclick="selectAlias(\\''+a.local_part+'\\')">Open</button>'+
-                '<span><b>'+esc(addr)+'</b></span>'+
-                (a.disabled?'<span class="pill">disabled</span>':'')+
+              '<div class="listItem">'+
+                '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
+                  '<button class="btn-primary" onclick="selectAlias(\\''+a.local_part+'\\')">'+
+                    (isOpen?'Close':'Open')+
+                  '</button>'+
+                  '<span><b>'+esc(addr)+'</b></span>'+
+                  (a.disabled?'<span class="pill">disabled</span>':'')+
+                '</div>'+
+                '<div><button onclick="delAlias(\\''+a.local_part+'\\')" class="danger">Delete</button></div>'+
               '</div>'+
-              '<div><button onclick="delAlias(\\''+a.local_part+'\\')" class="danger">Delete</button></div>';
+              '<div id="inbox_'+a.local_part+'" style="display:'+(isOpen?'block':'none')+';margin-top:10px;padding-left:10px"></div>';
+            
             box.appendChild(div);
           }
+          
+          if(SELECTED){ await loadEmails(); }
         }
 
         async function selectAlias(local){
-          SELECTED=local;
-          document.getElementById('selAlias').textContent = 'Mail: '+local+'@${domain}';
-          document.getElementById('refreshBtn').disabled=false;
-          await loadEmails();
+          const wasSelected = SELECTED===local;
+          
+          if(wasSelected){
+            SELECTED=null;
+            stopAutoRefresh();
+          } else {
+            SELECTED=local;
+            startAutoRefresh();
+          }
+          
+          await loadAliases();
+          
+          if(!wasSelected){
+            const inbox = document.getElementById('inbox_'+local);
+            if(inbox) inbox.scrollIntoView({behavior:'smooth', block:'nearest'});
+          }
         }
 
-        async function loadEmails(){
+        async function loadEmails(silent=false){
           if(!SELECTED) return;
-          const j = await api('/api/emails?alias='+encodeURIComponent(SELECTED));
-          if(!j.ok){ alert(j.error||'gagal'); return; }
-          const box=document.getElementById('emails');
-          box.innerHTML='';
-          if(j.emails.length===0){
-            box.innerHTML='<div class="muted">Belum ada email masuk.</div>';
-            return;
-          }
-          for(const m of j.emails){
-            const d=document.createElement('div');
-            d.className='mailItem';
-            d.innerHTML =
-              '<div class="mailSubject">'+esc(m.subject||'(no subject)')+'</div>'+
-              '<div class="mailMeta">From: '+esc(m.from_addr||'')+'</div>'+
-              '<div class="mailMeta">'+esc(fmtDate(m.date || m.created_at || ""))+'</div>'+
-              (m.snippet ? '<div class="mailSnippet">'+esc(m.snippet)+'</div>' : '')+
-              '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
-                '<button class="btn-primary" onclick="openEmail(\\''+m.id+'\\')">View</button>'+
-                '<button onclick="delEmail(\\''+m.id+'\\')" class="danger">Delete</button>'+
+          
+          const box=document.getElementById('inbox_'+SELECTED);
+          if(!box) return;
+          
+          try{
+            const j = await api('/api/emails?alias='+encodeURIComponent(SELECTED));
+            if(!j.ok){ 
+              if(!silent) alert(j.error||'gagal'); 
+              return; 
+            }
+            
+            const refreshInfo = silent ? '<span class="muted" style="font-size:11px;margin-left:8px">\ud83d\udd04 Auto (30s)</span>' : '';
+            
+            let html = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">'+
+              '<b>Inbox</b>'+refreshInfo+
+              '<button class="btn-ghost" onclick="loadEmails()">Refresh</button>'+
               '</div>';
-            box.appendChild(d);
+            
+            if(j.emails.length===0){
+              html += '<div class="muted">Belum ada email masuk.</div>';
+            } else {
+              for(const m of j.emails){
+                html += '<div class="mailItem">'+
+                  '<div class="mailSubject">'+esc(m.subject||'(no subject)')+'</div>'+
+                  '<div class="mailMeta">From: '+esc(m.from_addr||'')+'</div>'+
+                  '<div class="mailMeta">'+esc(fmtDate(m.date || m.created_at || ""))+'</div>'+
+                  (m.snippet ? '<div class="mailSnippet">'+esc(m.snippet)+'</div>' : '')+
+                  '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
+                    '<button class="btn-primary" onclick="openEmail(\\''+m.id+'\\')">View</button>'+
+                    '<button onclick="delEmail(\\''+m.id+'\\')" class="danger">Delete</button>'+
+                  '</div>'+
+                '</div>';
+              }
+            }
+            
+            box.innerHTML = html;
+          }catch(e){
+            if(!silent) console.error('Load emails error:', e);
           }
         }
 
@@ -958,9 +1007,7 @@ const PAGES = {
           if(!j.ok){ alert(j.error||'gagal'); return; }
           if(SELECTED===local){
             SELECTED=null;
-            document.getElementById('selAlias').textContent='Pilih mail…';
-            document.getElementById('emails').innerHTML='';
-            document.getElementById('refreshBtn').disabled=true;
+            stopAutoRefresh();
           }
           document.getElementById('emailView').style.display='none';
           await loadMe();
@@ -975,7 +1022,22 @@ const PAGES = {
           await loadEmails();
         }
 
+        function startAutoRefresh(){
+          stopAutoRefresh();
+          AUTO_REFRESH_INTERVAL = setInterval(()=>{
+            loadEmails(true);
+          }, 30000);
+        }
+
+        function stopAutoRefresh(){
+          if(AUTO_REFRESH_INTERVAL){
+            clearInterval(AUTO_REFRESH_INTERVAL);
+            AUTO_REFRESH_INTERVAL = null;
+          }
+        }
+
         async function logout(){
+          stopAutoRefresh();
           await fetch('/api/auth/logout',{method:'POST'});
           location.href='/login';
         }
@@ -1149,10 +1211,10 @@ async function cleanupExpired(env) {
   const t = nowSec();
   try {
     await env.DB.prepare(`DELETE FROM sessions WHERE expires_at <= ?`).bind(t).run();
-  } catch {}
+  } catch { }
   try {
     await env.DB.prepare(`DELETE FROM reset_tokens WHERE expires_at <= ?`).bind(t).run();
-  } catch {}
+  } catch { }
 }
 
 // NEW: delete user (cascade + R2 cleanup)
@@ -1166,7 +1228,7 @@ async function deleteUserCascade(env, userId, ctx) {
       .bind(userId)
       .all();
     rawKeys = (r.results || []).map((x) => x?.raw_key).filter(Boolean);
-  } catch {}
+  } catch { }
 
   // hapus data turunan dulu
   await env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(userId).run();
@@ -1332,17 +1394,17 @@ export default {
 
           const user = hasIters
             ? await env.DB.prepare(
-                `SELECT id, username, email, pass_salt, pass_hash, pass_iters, role, alias_limit, disabled
+              `SELECT id, username, email, pass_salt, pass_hash, pass_iters, role, alias_limit, disabled
                  FROM users WHERE username = ? OR email = ?`
-              )
-                .bind(id, id)
-                .first()
+            )
+              .bind(id, id)
+              .first()
             : await env.DB.prepare(
-                `SELECT id, username, email, pass_salt, pass_hash, role, alias_limit, disabled
+              `SELECT id, username, email, pass_salt, pass_hash, role, alias_limit, disabled
                  FROM users WHERE username = ? OR email = ?`
-              )
-                .bind(id, id)
-                .first();
+            )
+              .bind(id, id)
+              .first();
 
           if (!user || user.disabled) return unauthorized("Login gagal");
 
